@@ -1,2 +1,2 @@
 # Agency-reminder
-windos上用来将进行代办提醒
+桌面应用代办提醒
