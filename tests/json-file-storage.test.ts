@@ -3,7 +3,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createJsonFileStorage, type JsonReadResult } from '../electron/json-file-storage'
 
-const TEST_DIR = path.join(__dirname, '..', '..', 'tests', 'tmp-storage')
+// 临时目录必须落在 tests/ 内部，避免污染项目外部目录（cleanDir 会递归删除该目录）
+const TEST_DIR = path.join(__dirname, 'tmp-storage')
 
 function cleanDir() {
   if (fs.existsSync(TEST_DIR)) {
@@ -17,7 +18,7 @@ describe('json-file-storage', () => {
   afterEach(cleanDir)
 
   const storage = createJsonFileStorage({
-    backupCount: 1, // 当前仍是 3，但 DATA-09 会改为 1，这里用 1 测试单份备份逻辑
+    backupCount: 1,
     logError: () => {},
   })
 
@@ -31,11 +32,21 @@ describe('json-file-storage', () => {
       expect(result.data).toEqual({ todos: [{ id: '1', title: 'test' }] })
     })
 
-    it('writeJsonAtomically 校验失败时不覆盖原文件', () => {
-      // 说明：writeJsonAtomically 内部总是先 JSON.stringify 产生合法 JSON，再以 validateJson=true 写入。
-      // 因此「写入非法 JSON 导致校验失败回滚」在公共 API 层不可触发。
-      // replaceFileAtomically 内部已有 validateJson 分支，逻辑已覆盖在原子写入成功路径测试中。
-      expect(true).toBe(true)
+    it('序列化失败时抛错且不破坏原文件', () => {
+      storage.writeJsonAtomically(testFile, { v: 1 })
+      const circular: Record<string, unknown> = { v: 2 }
+      circular.self = circular
+      expect(() => storage.writeJsonAtomically(testFile, circular)).toThrow()
+      expect(JSON.parse(fs.readFileSync(testFile, 'utf-8'))).toEqual({ v: 1 })
+    })
+
+    it('rename 失败时清理临时文件并抛出原始错误', () => {
+      // 目标路径是一个已存在的目录，renameSync 必然失败，用于触发 catch 分支的临时文件清理
+      const dirAsTarget = path.join(TEST_DIR, 'target-is-dir')
+      fs.mkdirSync(dirAsTarget, { recursive: true })
+      expect(() => storage.writeJsonAtomically(dirAsTarget, { v: 1 })).toThrow()
+      const leftovers = fs.readdirSync(TEST_DIR).filter(name => name.includes('.tmp-'))
+      expect(leftovers).toEqual([])
     })
 
     it('文件不存在返回 missingValue', () => {

@@ -25,7 +25,7 @@ const priorityOptions = [
   { value: 1, label: '紧急', desc: '紧急任务', color: '#ff4d4f' },
   { value: 2, label: '较高', desc: '较重要任务', color: '#fa8c16' },
   { value: 3, label: '普通', desc: '普通任务', color: '#1890ff' }
-]
+] as const
 
 const isEditing = computed(() => !!props.editingTodo)
 
@@ -113,7 +113,7 @@ onMounted(async () => {
               class="priority-btn"
               :class="{ active: priority === opt.value }"
               :style="priority === opt.value ? { backgroundColor: opt.color, borderColor: opt.color } : {}"
-              @click="priority = opt.value as 1 | 2 | 3 | 4"
+              @click="priority = opt.value"
               :title="opt.desc"
             >{{ opt.label }}</button>
           </div>

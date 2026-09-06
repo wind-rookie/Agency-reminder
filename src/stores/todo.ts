@@ -1,19 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref, computed, toRaw } from 'vue'
-import { getLocalDateString } from '../utils/date'
+import { getLocalDateString, parseLocalDate, getNextPendingRepeatDate } from '../utils/date'
 import type { Todo } from '../../electron/types'
 
 export type { Todo } from '../../electron/types'
 
 // 优先级配置
 export const PRIORITY_CONFIG: Record<number, { label: string; color: string }> = {
-  1: { label: '紧急', color: '#ff4d4f' },  // 红色 - 紧急
-  2: { label: '较高', color: '#fa8c16' },  // 橙色 - 较高
-  3: { label: '普通', color: '#1890ff' }   // 蓝色 - 普通（默认）
+  1: { label: '紧急', color: '#ff4d4f' },
+  2: { label: '较高', color: '#fa8c16' },
+  3: { label: '普通', color: '#1890ff' }
 }
-
-// 预设标签
-export const DEFAULT_TAGS = ['需求', 'Bug', '临时活']
 
 // 预设颜色
 export const COLORS = [
@@ -44,16 +41,6 @@ export const useTodoStore = defineStore('todo', () => {
     const today = getLocalDateString(new Date())
     return todos.value.filter(t => t.date === today)
   })
-
-  const undoneTodos = computed(() => {
-    return todos.value.filter(t => !t.completed)
-  })
-
-  // getDateString 已由 getLocalDateString 替代（来自 utils/date.ts）
-  // 保留此函数名作为内部别名，避免改动范围过大
-  function getDateString(date: Date): string {
-    return getLocalDateString(date)
-  }
 
   function generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substring(2)
@@ -140,12 +127,12 @@ export const useTodoStore = defineStore('todo', () => {
     const todo = todos.value.find(t => t.id === id)
     if (todo) {
       todo.completed = !todo.completed
-      // Handle repeat
+      // 完成重复任务时派生下一次实例；generatedFromId 保证反复切换不会重复派生
       if (todo.completed && todo.repeat && !todos.value.some(item => item.generatedFromId === todo.id)) {
         const repeatAnchorDay = todo.repeat === 'monthly'
           ? todo.repeatAnchorDay || parseLocalDate(todo.date).getDate()
           : undefined
-        const nextDate = getNextDate(todo.date, todo.repeat, repeatAnchorDay)
+        const nextDate = getNextPendingRepeatDate(todo.date, todo.repeat, repeatAnchorDay)
         const newTodo: Todo = {
           ...todo,
           id: generateId(),
@@ -159,33 +146,6 @@ export const useTodoStore = defineStore('todo', () => {
       }
       await saveTodos()
     }
-  }
-
-  function parseLocalDate(dateStr: string): Date {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
-    if (!match) throw new Error(`无效日期：${dateStr}`)
-    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    if (getDateString(date) !== dateStr) throw new Error(`无效日期：${dateStr}`)
-    return date
-  }
-
-  function getNextDate(dateStr: string, repeat: NonNullable<Todo['repeat']>, repeatAnchorDay?: number): string {
-    let nextDate = parseLocalDate(dateStr)
-    const today = getDateString(new Date())
-    do {
-      if (repeat === 'daily') {
-        nextDate.setDate(nextDate.getDate() + 1)
-      } else if (repeat === 'weekly') {
-        nextDate.setDate(nextDate.getDate() + 7)
-      } else {
-        const anchorDay = repeatAnchorDay || nextDate.getDate()
-        const targetYear = nextDate.getMonth() === 11 ? nextDate.getFullYear() + 1 : nextDate.getFullYear()
-        const targetMonth = (nextDate.getMonth() + 1) % 12
-        const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate()
-        nextDate = new Date(targetYear, targetMonth, Math.min(anchorDay, lastDay))
-      }
-    } while (getDateString(nextDate) <= today)
-    return getDateString(nextDate)
   }
 
   function getTodosByDateRange(startDate: string, endDate: string) {
@@ -207,7 +167,6 @@ export const useTodoStore = defineStore('todo', () => {
     hasUnsavedChanges,
     persistenceError,
     todayTodos,
-    undoneTodos,
     searchQuery,
     applySearch,
     loadTodos,

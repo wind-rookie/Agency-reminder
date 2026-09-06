@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Todo, PRIORITY_CONFIG } from '../stores/todo'
+import type { Todo } from '../stores/todo'
 import { PRIORITY_CONFIG as priorityConfig } from '../stores/todo'
 
 defineProps<{
