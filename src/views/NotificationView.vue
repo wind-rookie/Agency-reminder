@@ -1,6 +1,9 @@
 <template>
   <div class="notification-wrapper">
-    <div class="notification-card" @click="closeNotification">
+    <div class="notification-card" :class="{ persistent }" @click="closeNotification" @mouseenter="notifyHover(true)" @mouseleave="notifyHover(false)">
+      <!-- 持久弹窗顶部强调条 -->
+      <div v-if="persistent" class="persistent-bar"></div>
+
       <!-- 关闭按钮 -->
       <button class="close-btn" @click.stop="closeNotification" title="关闭">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
@@ -8,6 +11,9 @@
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
+
+      <!-- 持久弹窗角标 -->
+      <span v-if="persistent" class="persistent-pin" title="持久弹窗·需手动关闭">📌</span>
       
       <!-- 图标区域 -->
       <div class="icon-container">
@@ -29,15 +35,21 @@ import { appBranding } from '../config/branding'
 
 const title = ref('')
 const body = ref('')
+const persistent = ref(false)
 
 function closeNotification() {
   window.close()
 }
 
+function notifyHover(hovering: boolean) {
+  window.electronAPI?.notifyHoverChange?.(hovering)
+}
+
 onMounted(() => {
-  window.electronAPI?.onNotificationData?.((data: { title: string; body: string }) => {
+  window.electronAPI?.onNotificationData?.((data: { title: string; body: string; persistent?: boolean }) => {
     title.value = data.title
     body.value = data.body
+    persistent.value = data.persistent === true
   })
 })
 
@@ -193,5 +205,37 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 持久弹窗视觉：边框加粗换色 + 顶部强调条 + 图钉角标 */
+.notification-card.persistent {
+  border: 2.5px solid rgba(245, 158, 11, 0.7);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.notification-card.persistent:hover {
+  border-color: rgba(245, 158, 11, 0.9);
+  box-shadow: 0 6px 24px rgba(245, 158, 11, 0.25);
+}
+
+.persistent-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #f59e0b, #f97316);
+  z-index: 9;
+}
+
+.persistent-pin {
+  position: absolute;
+  top: 9px;
+  right: 36px;
+  font-size: 12px;
+  line-height: 1;
+  z-index: 10;
+  cursor: default;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 </style>

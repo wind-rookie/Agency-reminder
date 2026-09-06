@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { OperationResult, ConfigWriteKey, StoreWriteKey, NotificationPosition } from '../../electron/ipc-types'
+import type { OperationResult, StoreWriteKey, NotificationPosition } from '../../electron/ipc-types'
 
 export type { NotificationPosition } from '../../electron/ipc-types'
 
@@ -13,6 +13,12 @@ export const useSettingsStore = defineStore('settings', () => {
   const toggleMainKey = ref('Ctrl+Shift+F')
   const language = ref('zh-CN')
   const notificationPosition = ref<NotificationPosition>('bottom-right')
+
+  // 持久弹窗设置
+  const persistentNotification = ref(false)
+  const persistentPriorityThreshold = ref<1 | 2 | 3>(1)
+  const persistentMoveEnabled = ref(true)
+  const persistentMoveDelay = ref(30)
 
   // 周视图标题关键词搜索持久化
   const filterSearchQuery = ref('')
@@ -58,6 +64,12 @@ export const useSettingsStore = defineStore('settings', () => {
       toggleMainKey.value = (await window.electronAPI.getConfig('toggleMainKey')) as string || 'Ctrl+Shift+F'
       language.value = 'zh-CN'
       notificationPosition.value = (await window.electronAPI.getStore('notificationPosition')) as NotificationPosition || 'bottom-right'
+
+      // 加载持久弹窗设置
+      persistentNotification.value = (await window.electronAPI.getStore('persistentNotification')) as boolean || false
+      persistentPriorityThreshold.value = (await window.electronAPI.getStore('persistentPriorityThreshold')) as 1 | 2 | 3 || 1
+      persistentMoveEnabled.value = (await window.electronAPI.getStore('persistentMoveEnabled')) as boolean ?? true
+      persistentMoveDelay.value = (await window.electronAPI.getStore('persistentMoveDelay')) as number || 30
 
       // 加载周视图标题关键词搜索
       filterSearchQuery.value = (await window.electronAPI.getStore('filterSearchQuery')) as string || ''
@@ -178,6 +190,34 @@ export const useSettingsStore = defineStore('settings', () => {
     return saveStoreValue('todayBtnPosition', position)
   }
 
+  async function setPersistentNotification(value: boolean): Promise<OperationResult> {
+    const result = await saveStoreValue('persistentNotification', value)
+    if (!result.success) return result
+    persistentNotification.value = value
+    return { success: true }
+  }
+
+  async function setPersistentPriorityThreshold(value: 1 | 2 | 3): Promise<OperationResult> {
+    const result = await saveStoreValue('persistentPriorityThreshold', value)
+    if (!result.success) return result
+    persistentPriorityThreshold.value = value
+    return { success: true }
+  }
+
+  async function setPersistentMoveEnabled(value: boolean): Promise<OperationResult> {
+    const result = await saveStoreValue('persistentMoveEnabled', value)
+    if (!result.success) return result
+    persistentMoveEnabled.value = value
+    return { success: true }
+  }
+
+  async function setPersistentMoveDelay(value: number): Promise<OperationResult> {
+    const result = await saveStoreValue('persistentMoveDelay', value)
+    if (!result.success) return result
+    persistentMoveDelay.value = value
+    return { success: true }
+  }
+
   return {
     darkMode,
     alwaysOnTop,
@@ -201,6 +241,14 @@ export const useSettingsStore = defineStore('settings', () => {
     setToggleMainKey,
     setNotificationPosition,
     setFilterSearchQuery,
-    setTodayButtonPosition
+    setTodayButtonPosition,
+    persistentNotification,
+    persistentPriorityThreshold,
+    persistentMoveEnabled,
+    persistentMoveDelay,
+    setPersistentNotification,
+    setPersistentPriorityThreshold,
+    setPersistentMoveEnabled,
+    setPersistentMoveDelay
   }
 })

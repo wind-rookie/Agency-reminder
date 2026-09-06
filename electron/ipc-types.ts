@@ -21,6 +21,10 @@ export type StoreReadKey = ConfigReadKey
   | 'uiTransparency'
   | 'bgOpacity'
   | 'todayBtnPosition'
+  | 'persistentNotification'
+  | 'persistentPriorityThreshold'
+  | 'persistentMoveEnabled'
+  | 'persistentMoveDelay'
 
 export type StoreWriteKey = ConfigWriteKey
   | 'darkMode'
@@ -34,6 +38,10 @@ export type StoreWriteKey = ConfigWriteKey
   | 'uiTransparency'
   | 'bgOpacity'
   | 'todayBtnPosition'
+  | 'persistentNotification'
+  | 'persistentPriorityThreshold'
+  | 'persistentMoveEnabled'
+  | 'persistentMoveDelay'
 
 /** 通知弹窗位置 */
 export type NotificationPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -70,6 +78,7 @@ export interface ElectronAPI {
 
   // Notification
   showNotification: (options: { title: string; body: string; position?: NotificationPosition }) => Promise<OperationResult>
+  notifyHoverChange: (hovering: boolean) => void
 
   // Storage
   selectStoragePath: () => Promise<OperationResult<StorageSelectionResult>>
@@ -82,12 +91,13 @@ export interface ElectronAPI {
   // Events
   onQuickAddTodo: (callback: () => void) => void
   removeQuickAddTodoListener: (callback: () => void) => void
-  onNotificationData: (callback: (data: { title: string; body: string }) => void) => void
+  onNotificationData: (callback: (data: { title: string; body: string; persistent?: boolean }) => void) => void
   removeNotificationDataListeners: () => void
 }
 
 /** 通知窗口专用的最小 IPC 接口 */
 export interface NotificationElectronAPI {
-  onNotificationData: (callback: (data: { title: string; body: string }) => void) => void
+  onNotificationData: (callback: (data: { title: string; body: string; persistent?: boolean }) => void) => void
   removeNotificationDataListeners: () => void
+  notifyHoverChange: (hovering: boolean) => void
 }

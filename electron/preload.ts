@@ -6,15 +6,19 @@ const isNotificationWindow = process.argv.includes('--notification-window')
 
 const notificationAPI: NotificationElectronAPI = {
   // 通知窗口只允许接收主进程推送的通知数据
-  onNotificationData: (callback: (data: { title: string; body: string }) => void) => {
+  onNotificationData: (callback: (data: { title: string; body: string; persistent?: boolean }) => void) => {
     ipcRenderer.on('notification-data', (_, data) => {
       if (!data || typeof data.title !== 'string' || typeof data.body !== 'string') return
-      callback({ title: data.title, body: data.body })
+      callback({ title: data.title, body: data.body, persistent: data.persistent === true })
     })
   },
   // 通知窗口关闭时清理监听器
   removeNotificationDataListeners: () => {
     ipcRenderer.removeAllListeners('notification-data')
+  },
+  // 上报鼠标悬停状态（主进程据此暂停/恢复弹球移动）
+  notifyHoverChange: (hovering: boolean) => {
+    ipcRenderer.send('notification-hover', hovering)
   }
 }
 
@@ -50,6 +54,7 @@ const mainAPI: ElectronAPI = {
   // Notification
   showNotification: (options: { title: string; body: string; position?: 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left' }) =>
     ipcRenderer.invoke('show-notification', options),
+  notifyHoverChange: (hovering: boolean) => ipcRenderer.send('notification-hover', hovering),
 
   // Storage
   selectStoragePath: () => ipcRenderer.invoke('select-storage-path'),
@@ -69,10 +74,10 @@ const mainAPI: ElectronAPI = {
   },
 
   // Notification（主窗口一般不会收到通知事件，但保留校验以防主进程误发）
-  onNotificationData: (callback: (data: { title: string; body: string }) => void) => {
+  onNotificationData: (callback: (data: { title: string; body: string; persistent?: boolean }) => void) => {
     ipcRenderer.on('notification-data', (_, data) => {
       if (!data || typeof data.title !== 'string' || typeof data.body !== 'string') return
-      callback({ title: data.title, body: data.body })
+      callback({ title: data.title, body: data.body, persistent: data.persistent === true })
     })
   },
   removeNotificationDataListeners: () => {

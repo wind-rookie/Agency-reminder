@@ -25,6 +25,10 @@ export function createStoreValueValidators(): Record<string, (value: unknown) =>
       return typeof position.right === 'number' && Number.isFinite(position.right)
         && typeof position.bottom === 'number' && Number.isFinite(position.bottom)
         && position.right >= 0 && position.bottom >= 0
-    }
+    },
+    persistentNotification: value => typeof value === 'boolean',
+    persistentPriorityThreshold: value => [1, 2, 3].includes(value as number),
+    persistentMoveEnabled: value => typeof value === 'boolean',
+    persistentMoveDelay: value => typeof value === 'number' && Number.isInteger(value) && value >= 5 && value <= 600
   }
 }

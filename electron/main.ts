@@ -3,12 +3,13 @@ import { join } from 'path'
 import * as fs from 'fs'
 import Store from 'electron-store'
 import { ALLOWED_EXTERNAL_ORIGINS, CONFIG_READ_KEYS, CONFIG_WRITE_KEYS, createStoreValueValidators, type ShortcutConfigKey } from './ipc-security'
-import type { OperationResult, StorageSelectionResult } from './types'
+import type { OperationResult, StorageSelectionResult, Todo } from './types'
 import { createReminderScheduler, type NotificationPosition } from './reminder-scheduler'
 import { createDataStore } from './data-store'
 import { createMainWindow as createManagedMainWindow, registerWindowControlIpcHandlers } from './window-manager'
 import { registerSettingsIpcHandlers } from './settings-ipc'
 import { createNotificationWindow, registerNotificationIpcHandler } from './notification-window'
+import { findClosedTodoIds } from './persistent-logic'
 import { registerStorageIpcHandlers } from './storage-ipc'
 import { registerBackgroundIpcHandlers } from './background-ipc'
 import { registerExternalLinkIpcHandler } from './external-link-ipc'
@@ -167,7 +168,7 @@ function registerShortcut(key: ShortcutConfigKey, accelerator: unknown): boolean
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
-const showNotificationWindow = createNotificationWindow({
+const notificationWindowController = createNotificationWindow({
   isDev,
   preloadPath: join(__dirname, 'preload.js'),
   developmentUrl: 'http://localhost:5173/#/notification',
@@ -178,8 +179,15 @@ const showNotificationWindow = createNotificationWindow({
 
 registerNotificationIpcHandler({
   assertMainWindowSender,
-  showNotificationWindow
+  showNotificationWindow: notificationWindowController.showNotificationWindow
 })
+
+// 待办完成/删除后关闭对应持久弹窗
+function closePersistentWindowsForChanges(before: Todo[], after: unknown) {
+  for (const id of findClosedTodoIds(before, after)) {
+    notificationWindowController.closePersistentWindow(id)
+  }
+}
 
 function createMainWindow() {
   mainWindow = createManagedMainWindow({
@@ -192,6 +200,10 @@ function createMainWindow() {
     hasUnsavedChanges: dataStore.hasUnsavedChanges,
     isQuitting: () => isQuitting,
     setQuitting: value => { isQuitting = value }
+  })
+  mainWindow.on('closed', () => {
+    // 主窗口真正关闭（非最小化到托盘）时，清理所有持久弹窗，避免应用残留后台
+    notificationWindowController.closeAllPersistentWindows()
   })
 }
 
@@ -385,7 +397,14 @@ registerStorageIpcHandlers({
   assertMainWindowSender,
   getTodos: dataStore.getTodos,
   getTodoPersistenceError: dataStore.getTodoPersistenceError,
-  saveTodos: dataStore.saveTodos,
+  saveTodos: (todos: unknown) => {
+    const before = dataStore.getTodos()
+    const result = dataStore.saveTodos(todos)
+    if (result.success) {
+      closePersistentWindowsForChanges(before, todos)
+    }
+    return result
+  },
   selectStoragePath: selectStoragePathForIpc,
   getStorageInfo: dataStore.getStorageInfo,
   getTags: dataStore.getTags,
@@ -408,7 +427,19 @@ registerWindowControlIpcHandlers({
 reminderScheduler = createReminderScheduler({
   getTodos: dataStore.getTodos,
   getNotificationPosition: () => defaultStore.get('notificationPosition') as NotificationPosition | undefined,
-  showNotification: options => showNotificationWindow(options),
+  showNotification: options => notificationWindowController.showNotificationWindow(options),
+  getPersistentConfig: () => {
+    const raw = defaultStore.get('persistentPriorityThreshold')
+    const threshold = raw === 2 || raw === 3 ? raw : 1
+    const rawDelay = defaultStore.get('persistentMoveDelay')
+    const moveEnabledRaw = defaultStore.get('persistentMoveEnabled')
+    return {
+      enabled: Boolean(defaultStore.get('persistentNotification')),
+      threshold: threshold as 1 | 2 | 3,
+      moveEnabled: moveEnabledRaw === undefined ? true : Boolean(moveEnabledRaw),
+      moveDelay: typeof rawDelay === 'number' ? rawDelay : 30
+    }
+  },
   getRemindedIds: () => defaultStore.get('remindedIds'),
   saveRemindedIds: keys => defaultStore.set('remindedIds', keys),
   onError: error => logError('主进程检查提醒失败:', error)

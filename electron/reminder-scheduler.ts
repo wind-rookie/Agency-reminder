@@ -2,6 +2,7 @@ import { powerMonitor } from 'electron'
 import { getLocalDateString } from './utils'
 import type { Todo } from './types'
 import { appBranding } from '../src/config/branding'
+import { shouldBePersistent, type PersistentNotificationConfig } from './persistent-logic'
 
 export type NotificationPosition = 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left'
 
@@ -12,7 +13,16 @@ interface ReminderNotificationResult {
 interface ReminderSchedulerDependencies {
   getTodos: () => Todo[]
   getNotificationPosition: () => NotificationPosition | undefined
-  showNotification: (options: { title: string; body: string; position: NotificationPosition }) => Promise<ReminderNotificationResult>
+  showNotification: (options: {
+    title: string
+    body: string
+    position: NotificationPosition
+    persistent?: boolean
+    todoId?: string
+    moveEnabled?: boolean
+    moveDelay?: number
+  }) => Promise<ReminderNotificationResult>
+  getPersistentConfig: () => PersistentNotificationConfig
   getRemindedIds: () => unknown
   saveRemindedIds: (keys: string[]) => void
   onError: (error: unknown) => void
@@ -42,6 +52,7 @@ export function createReminderScheduler(dependencies: ReminderSchedulerDependenc
       const remindedKeys = new Set(savedKeys.filter(key => currentReminderKeys.has(key)))
       let changed = remindedKeys.size !== savedKeys.length
       const configuredPosition = dependencies.getNotificationPosition() || 'bottom-right'
+      const persistentConfig = dependencies.getPersistentConfig()
 
       for (const todo of todos) {
         if (todo.completed || todo.date !== today || typeof todo.remindTime !== 'string') continue
@@ -49,10 +60,15 @@ export function createReminderScheduler(dependencies: ReminderSchedulerDependenc
 
         const remindKey = `${todo.id}-${todo.date}-${todo.remindTime}`
         if (remindedKeys.has(remindKey)) continue
+        const persistent = shouldBePersistent(todo, persistentConfig)
         const result = await dependencies.showNotification({
           title: appBranding.notificationTitle,
           body: todo.title,
-          position: configuredPosition
+          position: configuredPosition,
+          persistent,
+          todoId: todo.id,
+          moveEnabled: persistentConfig.moveEnabled,
+          moveDelay: persistentConfig.moveDelay
         })
         if (result.success) {
           remindedKeys.add(remindKey)
